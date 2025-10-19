@@ -1,8 +1,16 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
 import pdfplumber
 from docx import Document
-from analyzer import simple_skill_extractor, detect_sections, calculate_completeness
+from analyzer import (
+    advanced_skill_extractor, detect_sections_advanced, calculate_completeness_advanced,
+    analyze_keyword_density, calculate_ats_score, analyze_content_quality,
+    generate_improvement_suggestions, ATS_KEYWORDS, simple_skill_extractor, detect_sections
+)
+import json
+import os
+from datetime import datetime
 
 app = FastAPI()
 
@@ -98,32 +106,144 @@ def extract_text_from_docx(file):
 
 @app.post("/analyze")
 async def analyze_resume(file: UploadFile = File(...)):
-    # 1️⃣ Extract text based on file type
-    if file.filename.endswith(".pdf"):
-        text = extract_text_from_pdf(file.file)
-    elif file.filename.endswith(".docx"):
-        text = extract_text_from_docx(file.file)
-    else:
-        return {"error": "Unsupported file type. Use PDF or DOCX."}
+    """Advanced resume analysis with comprehensive insights"""
+    try:
+        # 1️⃣ Extract text based on file type
+        if file.filename.endswith(".pdf"):
+            text = extract_text_from_pdf(file.file)
+        elif file.filename.endswith(".docx"):
+            text = extract_text_from_docx(file.file)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Use PDF or DOCX.")
 
-    # 2️⃣ Detect skills
-    result = simple_skill_extractor(text)
-    skills = result["skills_found"]
+        # 2️⃣ Advanced skill analysis
+        skills_advanced = advanced_skill_extractor(text)
+        skills_simple = [skill["skill"] for skill in skills_advanced]
 
-    # 3️⃣ Detect sections
-    found_sections, missing_sections = detect_sections(text)
+        # 3️⃣ Section analysis
+        found_sections, missing_sections = detect_sections_advanced(text)
 
-    # 4️⃣ Calculate completeness
-    completeness = calculate_completeness(found_sections, skills)
+        # 4️⃣ ATS optimization analysis
+        ats_score, ats_checks = calculate_ats_score(text)
+        keyword_analysis = analyze_keyword_density(text, ATS_KEYWORDS)
 
-    # 5️⃣ Suggestions
-    suggestions = [f"Add {sec} section" for sec in missing_sections]
+        # 5️⃣ Content quality analysis
+        content_analysis = analyze_content_quality(text)
 
-    return {
-        "text_snippet": text[:1000],
-        "skills_detected": skills,
-        "top_words": result["top_words"],
-        "found_sections": found_sections,
-        "completeness": completeness,
-        "suggestions": suggestions
-    }
+        # 6️⃣ Calculate advanced completeness
+        completeness = calculate_completeness_advanced(found_sections, skills_advanced, ats_score)
+
+        # 7️⃣ Generate comprehensive suggestions
+        suggestions = generate_improvement_suggestions(text, skills_advanced, found_sections, ats_score)
+
+        # 8️⃣ Skill categorization
+        skills_by_category = {}
+        for skill in skills_advanced:
+            category = skill["category"]
+            if category not in skills_by_category:
+                skills_by_category[category] = []
+            skills_by_category[category].append(skill)
+
+        return {
+            "text_snippet": text[:1000],
+            "skills_detected": skills_simple,
+            "skills_advanced": skills_advanced,
+            "skills_by_category": skills_by_category,
+            "found_sections": found_sections,
+            "missing_sections": missing_sections,
+            "completeness": completeness,
+            "ats_score": ats_score,
+            "ats_checks": ats_checks,
+            "keyword_analysis": keyword_analysis,
+            "content_analysis": content_analysis,
+            "suggestions": suggestions,
+            "analysis_timestamp": datetime.now().isoformat(),
+            "file_info": {
+                "filename": file.filename,
+                "file_size": len(text),
+                "word_count": content_analysis["word_count"]
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+@app.get("/analysis/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.post("/analysis/compare")
+async def compare_resumes(files: list[UploadFile] = File(...)):
+    """Compare multiple resumes"""
+    if len(files) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 files required for comparison")
+    
+    results = []
+    for file in files:
+        try:
+            if file.filename.endswith(".pdf"):
+                text = extract_text_from_pdf(file.file)
+            elif file.filename.endswith(".docx"):
+                text = extract_text_from_docx(file.file)
+            else:
+                continue
+            
+            skills = advanced_skill_extractor(text)
+            sections, _ = detect_sections_advanced(text)
+            ats_score, _ = calculate_ats_score(text)
+            
+            results.append({
+                "filename": file.filename,
+                "skills_count": len(skills),
+                "sections_count": len(sections),
+                "ats_score": ats_score,
+                "skills": [skill["skill"] for skill in skills]
+            })
+        except Exception as e:
+            results.append({
+                "filename": file.filename,
+                "error": str(e)
+            })
+    
+    return {"comparison_results": results}
+
+@app.post("/analysis/export")
+async def export_analysis(file: UploadFile = File(...), format: str = "json"):
+    """Export detailed analysis in various formats"""
+    try:
+        # Perform analysis
+        if file.filename.endswith(".pdf"):
+            text = extract_text_from_pdf(file.file)
+        elif file.filename.endswith(".docx"):
+            text = extract_text_from_docx(file.file)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+        
+        # Get comprehensive analysis
+        skills_advanced = advanced_skill_extractor(text)
+        found_sections, missing_sections = detect_sections_advanced(text)
+        ats_score, ats_checks = calculate_ats_score(text)
+        content_analysis = analyze_content_quality(text)
+        
+        analysis_data = {
+            "filename": file.filename,
+            "timestamp": datetime.now().isoformat(),
+            "skills": skills_advanced,
+            "sections": {
+                "found": found_sections,
+                "missing": missing_sections
+            },
+            "ats_score": ats_score,
+            "ats_checks": ats_checks,
+            "content_analysis": content_analysis,
+            "text_preview": text[:500]
+        }
+        
+        if format.lower() == "json":
+            return JSONResponse(content=analysis_data)
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported export format")
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
