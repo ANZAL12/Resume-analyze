@@ -14,12 +14,12 @@ from datetime import datetime
 
 app = FastAPI()
 
-# Allow React frontend
+# CORS middleware - Allow all origins for production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -172,6 +172,16 @@ async def analyze_resume(file: UploadFile = File(...)):
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "timestamp": datetime.now().isoformat()}
+
+@app.options("/analyze")
+async def analyze_options():
+    """Handle preflight requests for CORS"""
+    return {"message": "OK"}
+
+@app.get("/")
+async def root():
+    """Root endpoint with CORS headers"""
+    return {"message": "Resume Analyzer API is running", "cors": "enabled"}
 
 @app.post("/analysis/compare")
 async def compare_resumes(files: list[UploadFile] = File(...)):
