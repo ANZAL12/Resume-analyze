@@ -17,7 +17,8 @@ function App() {
     const fd = new FormData();
     fd.append("file", file);
     try {
-      const r = await axios.post("http://127.0.0.1:8000/analyze", fd);
+      const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+      const r = await axios.post(`${API_URL}/analyze`, fd);
       setResult(r.data);
     } catch (err) {
       alert("Error connecting to backend");
@@ -32,8 +33,9 @@ function App() {
     const fd = new FormData();
     fd.append("file", file);
     try {
+      const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
       const response = await axios.post(
-        "http://127.0.0.1:8000/generate_resume",
+        `${API_URL}/generate_resume`,
         fd,
         { responseType: "blob" }
       );
@@ -55,7 +57,8 @@ function App() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const response = await axios.post("http://127.0.0.1:8000/analysis/export", fd);
+      const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+      const response = await axios.post(`${API_URL}/analysis/export`, fd);
       
       const blob = new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' });
       const url = window.URL.createObjectURL(blob);
@@ -81,7 +84,8 @@ function App() {
     comparisonFiles.forEach(file => fd.append("files", file));
     
     try {
-      const response = await axios.post("http://127.0.0.1:8000/analysis/compare", fd);
+      const API_URL = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
+      const response = await axios.post(`${API_URL}/analysis/compare`, fd);
       setComparisonResult(response.data);
     } catch (err) {
       console.error(err);
